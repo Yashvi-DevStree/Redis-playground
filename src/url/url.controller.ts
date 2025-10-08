@@ -21,6 +21,18 @@ export class UrlController {
         }
     }
 
+    @Post('send-test-message')
+    async sendTestMessage(@Body() body: { shortCode: string } , @Req() req: Request) { 
+        const message = {
+            shortCode: body.shortCode,
+            ip: req.ip || '127.0.0.1',
+            timestamp: Date.now()
+        }
+
+        await this.urlService.sendTestMessage(message);
+        return { success: true, message: 'Test message sent', data: message };
+    }
+
     // 2️⃣ Get Analytics (should be before redirect)
     @Get('analytics/:shortCode')
     async analytics(@Param('shortCode') shortCode: string) {

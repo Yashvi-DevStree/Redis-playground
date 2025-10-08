@@ -2,10 +2,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
 import { nanoid } from 'nanoid';
+import { PubsubService } from 'src/redis/pubsub.service';
 
 @Injectable()
 export class UrlService {
-    constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) { }
+    constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis, private readonly pubSub: PubsubService) { }
     
     async shortenUrl(originalUrl: string, ip: string) {
         const rateKey = `rate_limit:${ip}`;
@@ -27,6 +28,8 @@ export class UrlService {
         await this.redis.sadd(`url_unique_visitors:${shortCode}`, ip);
         await this.redis.sadd('Active_users', ip);
         await this.redis.expire(`Active_users`, 86400); // 24 hours
+
+        await this.pubSub.publish('url_visits', { shortCode, ip, timestamp: Date.now() });
     }
 
     async getAnalytics(shortCode: string) { 
@@ -37,6 +40,10 @@ export class UrlService {
             clicks: clicks? parseInt(clicks) : 0,
             uniqueVisitors: uniqueVisitors || 0,
         }
+    }
+
+    async sendTestMessage(message: { shortCode: string, ip: string, timestamp: number }) {
+        await this.pubSub.publish('url_visits', message);
     }
 
     async getActiveUsers() { 
