@@ -5,6 +5,7 @@ import { Body, Controller, Get, HttpException, Param, Post, Req, Res } from '@ne
 import { UrlService } from './url.service';
 import { ShortenDto } from './dto/url.dto';
 import type { Request, Response } from 'express';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @Controller('url')
 export class UrlController {
@@ -22,15 +23,18 @@ export class UrlController {
     }
 
     @Post('send-test-message')
-    async sendTestMessage(@Body() body: { shortCode: string } , @Req() req: Request) { 
+    async sendMessage(@Body() body: SendMessageDto, @Req() req: Request) {
         const message = {
             shortCode: body.shortCode,
-            ip: req.ip || '127.0.0.1',
-            timestamp: Date.now()
-        }
+            ip: body.ip || req.ip || '127.0.0.1',
+            type: body.type || 'custom',
+            message: body.message || 'No message',
+            timestamp: Date.now(),
+        };
 
         await this.urlService.sendTestMessage(message);
-        return { success: true, message: 'Test message sent', data: message };
+
+        return { success: true, message: 'Message sent', data: message };
     }
 
     // 2️⃣ Get Analytics (should be before redirect)
@@ -54,5 +58,17 @@ export class UrlController {
         if (!originalUrl) return res.status(404).send('URL not found');
         await this.urlService.recordVisit(shortCode, req.ip || '');
         return res.redirect(originalUrl);
+    }
+
+    @Get('recent-events')
+    async getRecentEvents() {
+        const events = await this.urlService.getRecentEvents()
+        return { success: true, data: events}
+    }
+
+    @Get('process-queue')
+    async processQueue() {
+        await this.urlService.processVisitQueue()
+        return { success: true, message: 'Queue processed.'}
     }
 }

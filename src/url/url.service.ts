@@ -1,4 +1,6 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable prettier/prettier */
 import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
 import { nanoid } from 'nanoid';
@@ -24,12 +26,43 @@ export class UrlService {
     }
 
     async recordVisit(shortCode: string, ip: string) { 
+
+        // 1️⃣ Count total visits
         await this.redis.incr(`url_visits:${shortCode}`);
+
+        // 2️⃣ Track unique visitors
         await this.redis.sadd(`url_unique_visitors:${shortCode}`, ip);
+
+        // 3️⃣ Track active users
         await this.redis.sadd('Active_users', ip);
         await this.redis.expire(`Active_users`, 86400); // 24 hours
 
+        // 4️⃣ Publish event for subscribers (real-time updates)
         await this.pubSub.publish('url_visits', { shortCode, ip, timestamp: Date.now() });
+
+        // 5️⃣ Add stream for event logging
+        await this.redis.xadd(
+            'url_visits_stream',
+            '*',
+            'shortCode', shortCode,
+            'ip', ip,
+            'timestamp', Date.now().toString()
+        )
+
+        // 6️⃣ Add to queue for background task processing
+        await this.redis.lpush('visit_queue', JSON.stringify({ shortCode, ip, time: new Date().toISOString() }))
+        
+        // 7️⃣ Add to HyperLogLog for approxiamate unique visitors count
+        await this.redis.pfadd(`hll_unique_visitors:${shortCode}`, ip)
+    }
+
+    // ✅ Process background tasks (simulate async worker)
+    async processVisitQueue() {
+        const data = await this.redis.rpop('visit_queue');
+        if (data) { 
+            const event = JSON.parse(data);
+            console.log('Processing visit event:', event);
+        }    
     }
 
     async getAnalytics(shortCode: string) { 
@@ -48,5 +81,11 @@ export class UrlService {
 
     async getActiveUsers() { 
         return this.redis.scard('Active_users');
+    }
+
+    // ✅ Get Stream Events
+    async getRecentEvents(limit = 10) {
+        const events = await this.redis.xrevrange('url_visits_stream', '+', '-', 'COUNT', limit);
+        return events.map(([id, fields]) => ({id, data: fields}))
     }
 }
