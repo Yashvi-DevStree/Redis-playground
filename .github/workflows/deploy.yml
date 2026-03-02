@@ -37,7 +37,7 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ~/backend-app
-            git pull origin main
+            git pull origin master
             npm install
             npm run build
             pm2 restart backend-app
